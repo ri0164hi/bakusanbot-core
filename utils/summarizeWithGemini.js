@@ -19,4 +19,3 @@ async function summarizeWithGemini(content, type = SUMMARY_TYPES.NORMAL) {
 }
 
 module.exports = summarizeWithGemini;
-

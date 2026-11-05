@@ -3,3 +3,5 @@
 node_modules/
 *.log
 .DS_Store
+idv-knowledge.json
+idv-classification-cache.json

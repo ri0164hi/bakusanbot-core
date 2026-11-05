@@ -169,4 +169,3 @@ module.exports = {
   sortNewestFirst,
   selectArticle,
 };
-

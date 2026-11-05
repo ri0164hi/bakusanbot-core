@@ -13,6 +13,7 @@ const {
   selectArticle,
 } = require('../utils/idvSummary');
 const { getOrCreateSummary } = require('../utils/summaryService');
+const { selectItemsForType, countPending } = require('../utils/classifyUpdate');
 const { formatDateWithWeekday } = require('../utils/dateUtil');
 
 function createMemoryStore() {
@@ -152,3 +153,22 @@ test('failed or empty generations are not cached', async () => {
   assert.equal(store.entries.size, 0);
 });
 
+test('normal match excludes entertainment and unverified items, while retaining cooperative hunt', () => {
+  const items = [
+    { text: 'ランク戦の調整', modes: ['normal_match'], confidence: 'high', scope: 'exclusive', evidence: '対戦で変更' },
+    { text: '協力狩りの調整', modes: ['cooperative_hunt'], confidence: 'high', scope: 'exclusive', evidence: '協力狩りで変更' },
+    { text: '手記の加筆の調整', modes: ['handwriting'], confidence: 'high', scope: 'exclusive', evidence: '手記の加筆で変更' },
+    { text: '適用先不明', modes: ['normal_match', 'unknown'], confidence: 'low', scope: 'unclear', evidence: '不明' },
+    { text: '根拠なし', modes: ['normal_match'], confidence: 'high', scope: 'exclusive', evidence: '' },
+  ];
+  assert.deepEqual(selectItemsForType(items, 'normal').map(item => item.text), ['ランク戦の調整', '協力狩りの調整']);
+  assert.equal(countPending(items), 1);
+});
+
+test('entertainment summary selects entertainment modes separately', () => {
+  const items = [
+    { text: '通常対戦', modes: ['normal_match'], confidence: 'high', scope: 'exclusive', evidence: '対戦' },
+    { text: 'コピーキャット', modes: ['copycat'], confidence: 'high', scope: 'exclusive', evidence: 'コピーキャットゲーム' },
+  ];
+  assert.deepEqual(selectItemsForType(items, 'entertainment').map(item => item.text), ['コピーキャット']);
+});

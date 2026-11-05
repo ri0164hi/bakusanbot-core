@@ -39,4 +39,3 @@ async function getOrCreateSummary({ type, content, metadata = {}, generate, stor
 }
 
 module.exports = { getOrCreateSummary };
-

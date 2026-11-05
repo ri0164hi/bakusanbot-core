@@ -26,4 +26,3 @@ function extractImplementationDate(content, fallbackDate) {
 }
 
 module.exports = { formatDateWithWeekday, extractImplementationDate };
-

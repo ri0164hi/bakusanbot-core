@@ -10,6 +10,7 @@ const {
 const summarizeWithGemini = require('../utils/summarizeWithGemini');
 const { extractImplementationDate } = require('../utils/dateUtil');
 const { getOrCreateSummary } = require('../utils/summaryService');
+const { classifyUpdateItems, selectItemsForType, countPending } = require('../utils/classifyUpdate');
 
 const UPDATE_INDEX_URL = 'https://www.identityvgame.com/jp/news/update/index.html';
 const UPDATE_INDEX_2_URL = 'https://www.identityvgame.com/jp/news/update/index_2.html';
@@ -149,15 +150,27 @@ module.exports = {
 
       const content = await fetchArticleContent(article);
       const implementationDate = extractImplementationDate(content, article.date);
+      const classified = await classifyUpdateItems(content, article.link);
+      const selectedItems = selectItemsForType(classified, type);
+      const pendingCount = countPending(classified);
+      const summaryInput = selectedItems.length
+        ? selectedItems.map(item => `${item.sectionPath.join(' > ') || '分類なし'}\n- ${item.text}\n根拠: ${item.evidence}`).join('\n\n')
+        : `該当する変更項目はありません。`;
       const { entry, cached } = await getOrCreateSummary({
         type,
-        content,
+        content: `${content}\n\n[分類済み対象項目]\n${summaryInput}`,
         metadata: {
           title: article.title,
           link: article.link,
           implementationDate,
         },
-        generate: () => safeSummarize(content, type),
+        generate: () => selectedItems.length
+          ? safeSummarize(summaryInput, type)
+          : Promise.resolve(type === SUMMARY_TYPES.NORMAL
+            ? `今週、通常対戦・協力狩りに関わる重要な変更はありません。${pendingCount ? `\n⚠️ 適用先を確認できず保留した項目: ${pendingCount}件` : ''}`
+            : type === SUMMARY_TYPES.ENTERTAINMENT
+              ? '今回、その他の娯楽モードに関する重要な変更はありません。'
+              : '今回、確認できるテストサーバー関連の変更項目はありません。'),
       });
 
       console.log(`[IDV] ${SUMMARY_LABELS[type]}の要約完了 (cache=${cached})`);
@@ -168,4 +181,3 @@ module.exports = {
     }
   },
 };
-
