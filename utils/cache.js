@@ -1,35 +1,45 @@
 const fs = require('fs');
 const path = require('path');
+
 const cacheFile = path.join(__dirname, '../cache.json');
+const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 function loadCache() {
-  if (fs.existsSync(cacheFile)) {
-    let cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+  if (!fs.existsSync(cacheFile)) return {};
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
     const now = Date.now();
-    const oneWeek = 7 * 24 * 60 * 60 * 1000;
-
-    // 期限切れ & 古いキー形式を削除
-    for (const key in cache) {
-      const entry = cache[key];
-
-      // 古いキー形式（httpで始まらないもの）は削除
-      if (!key.startsWith("http")) {
-        delete cache[key];
-        continue;
-      }
-
-      // 期限切れ削除
-      if (now - entry.timestamp > oneWeek) {
-        delete cache[key];
-      }
+    const cache = {};
+    for (const [key, entry] of Object.entries(parsed)) {
+      if (!entry || typeof entry !== 'object' || typeof entry.summary !== 'string') continue;
+      if (!Number.isFinite(entry.timestamp) || now - entry.timestamp > CACHE_TTL_MS || entry.timestamp > now) continue;
+      cache[key] = entry;
     }
     return cache;
+  } catch (error) {
+    console.error('[IDV] キャッシュ読み込み失敗:', error.message);
+    return {};
   }
-  return {};
 }
 
 function saveCache(cache) {
-  fs.writeFileSync(cacheFile, JSON.stringify(cache, null, 2));
+  const tempFile = `${cacheFile}.tmp`;
+  fs.writeFileSync(tempFile, JSON.stringify(cache, null, 2));
+  fs.renameSync(tempFile, cacheFile);
 }
 
-module.exports = { loadCache, saveCache };
+function getCacheEntry(key) {
+  return loadCache()[key] || null;
+}
+
+function saveCacheEntry(key, entry) {
+  const cache = loadCache();
+  cache[key] = entry;
+  saveCache(cache);
+}
+
+module.exports = { CACHE_TTL_MS, loadCache, saveCache, getCacheEntry, saveCacheEntry };
+

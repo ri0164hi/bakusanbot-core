@@ -7,8 +7,9 @@
     "start": "node index.js",
     "bot": "node index.js",
     "autopush": "node auto-push.js",
+    "deploy-commands": "node deploy-commands.js",
     "dev": "concurrently \"node index.js\" \"node auto-push.js\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
@@ -27,3 +28,4 @@
     "concurrently": "^9.0.1"
   }
 }
+

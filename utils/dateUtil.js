@@ -1,6 +1,8 @@
 function formatDateWithWeekday(dateStr) {
+  if (!dateStr) return '日付不明';
   const normalized = dateStr.replace(/\./g, '/').replace(/-/g, '/');
   const d = new Date(normalized);
+  if (Number.isNaN(d.getTime())) return '日付不明';
   const weekdays = ['日','月','火','水','木','金','土'];
   const y = d.getFullYear();
   const m = d.getMonth() + 1;
@@ -24,3 +26,4 @@ function extractImplementationDate(content, fallbackDate) {
 }
 
 module.exports = { formatDateWithWeekday, extractImplementationDate };
+
