@@ -113,15 +113,13 @@ const data = new SlashCommandBuilder()
   .setName('第五人格')
   .setDescription('第五人格関連の情報を取得します');
 
-// 既存の「アプデ情報」も残し、新しい「アプデ内容」を追加して旧呼び出しを壊さない。
-addSummarySubcommand(data, 'アプデ内容');
+// アップデート要約コマンドは「アプデ情報」に統一する。
 addSummarySubcommand(data, 'アプデ情報');
 
 module.exports = {
   data,
   async execute(interaction) {
-    const subcommand = interaction.options.getSubcommand();
-    if (!['アプデ内容', 'アプデ情報'].includes(subcommand)) return;
+    if (interaction.options.getSubcommand() !== 'アプデ情報') return;
 
     const type = interaction.options.getString('対象') || SUMMARY_TYPES.NORMAL;
 
