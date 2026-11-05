@@ -5,6 +5,9 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const knowledgeStore = require('./idvKnowledgeStore');
 
 const KNOWLEDGE_VERSION = 'v1';
+const CLASSIFICATION_CACHE_DIR = process.env.IDV_KNOWLEDGE_PATH
+  ? path.dirname(process.env.IDV_KNOWLEDGE_PATH)
+  : path.join(__dirname, '..');
 const MODES = ['normal_match', 'cooperative_hunt', 'handwriting', 'copycat', 'hide_and_seek', 'blackjack', 'other_entertainment', 'test_server', 'shared', 'unknown'];
 const classificationInFlight = new Map();
 
@@ -24,7 +27,7 @@ async function knowledgeForPrompt(content) {
 
 async function generateClassification(content, articleUrl) {
   const hash = crypto.createHash('sha256').update(content).digest('hex');
-  const cachePath = path.join(path.dirname(KNOWLEDGE_PATH), 'idv-classification-cache.json');
+  const cachePath = path.join(CLASSIFICATION_CACHE_DIR, 'idv-classification-cache.json');
   let cache = {};
   try { cache = JSON.parse(fs.readFileSync(cachePath, 'utf8')); } catch {}
   if (cache[hash]?.version === KNOWLEDGE_VERSION) return cache[hash].items;
