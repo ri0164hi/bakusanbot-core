@@ -14,6 +14,7 @@ const {
 } = require('../utils/idvSummary');
 const { getOrCreateSummary } = require('../utils/summaryService');
 const { selectItemsForType, countPending } = require('../utils/classifyUpdate');
+const { withGeminiRetry } = require('../utils/retryGemini');
 const { formatDateWithWeekday } = require('../utils/dateUtil');
 
 function createMemoryStore() {
@@ -171,4 +172,26 @@ test('entertainment summary selects entertainment modes separately', () => {
     { text: 'コピーキャット', modes: ['copycat'], confidence: 'high', scope: 'exclusive', evidence: 'コピーキャットゲーム', evidenceVerified: true },
   ];
   assert.deepEqual(selectItemsForType(items, 'entertainment').map(item => item.text), ['コピーキャット']);
+});
+
+test('Gemini retry repeats temporary 503/429 errors and returns on recovery', async () => {
+  let calls = 0;
+  const waits = [];
+  const result = await withGeminiRetry(async () => {
+    calls++;
+    if (calls < 3) throw Object.assign(new Error('busy'), { status: 503 });
+    return 'ok';
+  }, { sleep: async ms => waits.push(ms) });
+  assert.equal(result, 'ok');
+  assert.equal(calls, 3);
+  assert.deepEqual(waits, [2000, 4000]);
+});
+
+test('Gemini retry does not retry permanent errors', async () => {
+  let calls = 0;
+  await assert.rejects(withGeminiRetry(async () => {
+    calls++;
+    throw Object.assign(new Error('bad request'), { status: 400 });
+  }, { sleep: async () => {} }), /bad request/);
+  assert.equal(calls, 1);
 });

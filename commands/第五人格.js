@@ -11,6 +11,7 @@ const summarizeWithGemini = require('../utils/summarizeWithGemini');
 const { extractImplementationDate } = require('../utils/dateUtil');
 const { getOrCreateSummary } = require('../utils/summaryService');
 const { classifyUpdateItems, selectItemsForType, countPending } = require('../utils/classifyUpdate');
+const { withGeminiRetry } = require('../utils/retryGemini');
 
 const UPDATE_INDEX_URL = 'https://www.identityvgame.com/jp/news/update/index.html';
 const UPDATE_INDEX_2_URL = 'https://www.identityvgame.com/jp/news/update/index_2.html';
@@ -58,19 +59,9 @@ async function fetchArticleContent(article) {
 }
 
 async function safeSummarize(content, type) {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      return await summarizeWithGemini(content, type);
-    } catch (error) {
-      if ((error.status === 503 || error.status === 429) && attempt < 2) {
-        console.warn(`[IDV] Gemini一時エラー、再試行中 (${attempt + 1}/3)`);
-        await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
-        continue;
-      }
-      throw error;
-    }
-  }
-  throw new Error('Gemini APIの再試行上限に達しました。');
+  return withGeminiRetry(() => summarizeWithGemini(content, type), {
+    onRetry: ({ attempt }) => console.warn(`[IDV] Gemini一時エラー、再試行中 (${attempt}/3)`),
+  });
 }
 
 function splitMessage(content, maxLength = 1900) {
