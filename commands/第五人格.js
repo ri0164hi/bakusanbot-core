@@ -133,9 +133,10 @@ module.exports = {
     if (!['アプデ内容', 'アプデ情報'].includes(subcommand)) return;
 
     const type = interaction.options.getString('対象') || SUMMARY_TYPES.NORMAL;
-    await interaction.deferReply();
 
     try {
+      // Discordの初回応答期限を過ぎた場合でも、失敗をClientまで未処理で伝播させない。
+      await interaction.deferReply();
       const articles = await fetchArticles();
       const article = selectArticle(articles, type);
 
@@ -177,7 +178,16 @@ module.exports = {
       await sendEntry(interaction, entry, cached);
     } catch (error) {
       console.error('[IDV] アップデート要約失敗:', error);
-      await interaction.editReply('記事の取得または要約に失敗しました。時間をおいて再度お試しください。');
+      // deferReply自体が失敗した場合、interaction tokenが無効なので返信を再試行しない。
+      if (interaction.deferred || interaction.replied) {
+        try {
+          await interaction.editReply('記事の取得または要約に失敗しました。時間をおいて再度お試しください。');
+        } catch (replyError) {
+          console.error('[IDV] 失敗通知も送信できませんでした:', replyError);
+        }
+      } else if (error.code === 10062) {
+        console.warn('[IDV] Discordの応答期限切れです。ユーザーはコマンドを再実行できます。');
+      }
     }
   },
 };
