@@ -5,6 +5,63 @@ const { loadCache, saveCache } = require('../utils/cache');
 const summarizeWithGemini = require('../utils/summarizeWithGemini');
 const { extractImplementationDate } = require('../utils/dateUtil');
 
+const UPDATE_INDEX_URL = 'https://www.identityvgame.com/jp/news/update/index.html';
+const LATEST_NEWS_URL = 'https://www.identityvgame.com/jp/newspage.html';
+
+function normalizeArticleUrl(href, baseUrl) {
+  try {
+    return new URL(href, baseUrl).href;
+  } catch {
+    return null;
+  }
+}
+
+function extractArticles($, baseUrl) {
+  const articles = [];
+  const seen = new Set();
+
+  // 旧一覧ページの構造を優先しつつ、クラス名変更時は新着ページ上の
+  // 更新記事リンクを走査する。
+  $('a.newsItem, a[href]').each((_, el) => {
+    const a = $(el);
+    const href = a.attr('href');
+    if (!href) return;
+
+    const link = normalizeArticleUrl(href, baseUrl);
+    if (!link || seen.has(link)) return;
+    if (!/\/jp\/news\/update\//i.test(new URL(link).pathname)) return;
+
+    const rawText = a.text().replace(/\s+/g, ' ').trim();
+    if (!rawText) return;
+
+    const dateMatches = [...rawText.matchAll(/(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})日?/g)];
+    const date = dateMatches.length
+      ? `${dateMatches[dateMatches.length - 1][1]}-${dateMatches[dateMatches.length - 1][2].padStart(2, '0')}-${dateMatches[dateMatches.length - 1][3].padStart(2, '0')}`
+      : ((link.match(/\/(20\d{2})(\d{2})(\d{2})\//) || []).slice(1).join('-') || '');
+
+    let title = rawText
+      .replace(/^20\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2}日?\s*/, '')
+      .replace(/\s+20\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2}日?$/, '')
+      .trim();
+
+    // リンクテキストに日付しかない場合は親要素の見出しテキストも参照する。
+    if (!title || !/(ゲームアップデート|アップデート|テストサーバー)/i.test(title)) {
+      const parentText = a.parent().text().replace(/\s+/g, ' ').trim();
+      const candidate = parentText
+        .replace(/^20\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2}日?\s*/, '')
+        .replace(/\s+20\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2}日?$/, '')
+        .trim();
+      if (/(ゲームアップデート|アップデート|テストサーバー)/i.test(candidate)) title = candidate;
+    }
+
+    if (!title || !/(ゲームアップデート|アップデート|テストサーバー)/i.test(title)) return;
+    seen.add(link);
+    articles.push({ title, link, date });
+  });
+
+  return articles;
+}
+
 function isTestServerUpdate(title) {
   return title.includes("テストサーバー");
 }
@@ -61,7 +118,13 @@ async function processArticle(interaction, art, cache, cacheKey) {
   try {
     const { data: detailHtml } = await axios.get(art.link);
     const $$ = cheerio.load(detailHtml);
-    content = $$('.artText p').map((i, el) => $$(el).text().trim()).get().join("\n");
+    content = $$('.artText p').map((i, el) => $$(el).text().trim()).get().filter(Boolean).join("\n");
+    if (!content) {
+      const articleBody = $$('article, main, [class*="articleBody"], [class*="newsContent"], [class*="artText"]').first();
+      content = articleBody.length
+        ? articleBody.text().replace(/\s+/g, ' ').trim()
+        : $$('body').text().replace(/\s+/g, ' ').trim();
+    }
     console.log(`[IDV] 本文抜粋(${art.title}):`, content.slice(0, 120).replace(/\s+/g, ' '));
   } catch (e) {
     console.error(`[IDV] 詳細取得失敗(${art.link}):`, e.message);
@@ -127,20 +190,24 @@ module.exports = {
 
     const cache = loadCache();
 
-    const { data: html } = await axios.get("https://www.identityvgame.com/jp/news/update/index.html");
-    const $ = cheerio.load(html);
-    console.log("[IDV] HTML取得成功, 長さ:", html.length); // ← ここでサイト取得確認
+    let articles = [];
+    let html = '';
+    let indexError = null;
+    for (const pageUrl of [LATEST_NEWS_URL, UPDATE_INDEX_URL]) {
+      try {
+        const response = await axios.get(pageUrl, { timeout: 15000 });
+        html = response.data;
+        const $ = cheerio.load(html);
+        articles = extractArticles($, response.request?.res?.responseUrl || pageUrl);
+        console.log(`[IDV] 一覧取得成功: ${pageUrl}, HTML長: ${html.length}, 記事件数: ${articles.length}`);
+        if (articles.length) break;
+      } catch (error) {
+        indexError = error;
+        console.error(`[IDV] 一覧取得失敗(${pageUrl}):`, error.message);
+      }
+    }
 
-      let articles = [];
-      $('a.newsItem').each((i, el) => {
-        const a = $(el);
-        const title = a.find('span').text().trim();
-        const link = a.attr('href');
-        const date = a.find('i').text().trim();
-        if (title && link) {
-          articles.push({ title, link, date });
-        }
-      });
+    if (!html && indexError) throw indexError;
 
       if (articles.length === 0) {
         await interaction.editReply("記事が取得できませんでした。サイト構造が変わった可能性があります。");
@@ -202,3 +269,4 @@ module.exports = {
     }
   },
 };
+
