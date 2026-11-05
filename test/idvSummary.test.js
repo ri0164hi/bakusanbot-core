@@ -155,20 +155,20 @@ test('failed or empty generations are not cached', async () => {
 
 test('normal match excludes entertainment and unverified items, while retaining cooperative hunt', () => {
   const items = [
-    { text: 'ランク戦の調整', modes: ['normal_match'], confidence: 'high', scope: 'exclusive', evidence: '対戦で変更' },
-    { text: '協力狩りの調整', modes: ['cooperative_hunt'], confidence: 'high', scope: 'exclusive', evidence: '協力狩りで変更' },
-    { text: '手記の加筆の調整', modes: ['handwriting'], confidence: 'high', scope: 'exclusive', evidence: '手記の加筆で変更' },
-    { text: '適用先不明', modes: ['normal_match', 'unknown'], confidence: 'low', scope: 'unclear', evidence: '不明' },
-    { text: '根拠なし', modes: ['normal_match'], confidence: 'high', scope: 'exclusive', evidence: '' },
+    { text: 'ランク戦の調整', modes: ['normal_match'], confidence: 'high', scope: 'exclusive', evidence: '対戦で変更', evidenceVerified: true },
+    { text: '協力狩りの調整', modes: ['cooperative_hunt'], confidence: 'high', scope: 'exclusive', evidence: '協力狩りで変更', evidenceVerified: true },
+    { text: '手記の加筆の調整', modes: ['handwriting'], confidence: 'high', scope: 'exclusive', evidence: '手記の加筆で変更', evidenceVerified: true },
+    { text: '適用先不明', modes: ['normal_match', 'unknown'], confidence: 'low', scope: 'unclear', evidence: '不明', evidenceVerified: true },
+    { text: '根拠なし', modes: ['normal_match'], confidence: 'high', scope: 'exclusive', evidence: '', evidenceVerified: false },
   ];
   assert.deepEqual(selectItemsForType(items, 'normal').map(item => item.text), ['ランク戦の調整', '協力狩りの調整']);
-  assert.equal(countPending(items), 1);
+  assert.equal(countPending(items), 2);
 });
 
 test('entertainment summary selects entertainment modes separately', () => {
   const items = [
-    { text: '通常対戦', modes: ['normal_match'], confidence: 'high', scope: 'exclusive', evidence: '対戦' },
-    { text: 'コピーキャット', modes: ['copycat'], confidence: 'high', scope: 'exclusive', evidence: 'コピーキャットゲーム' },
+    { text: '通常対戦', modes: ['normal_match'], confidence: 'high', scope: 'exclusive', evidence: '対戦', evidenceVerified: true },
+    { text: 'コピーキャット', modes: ['copycat'], confidence: 'high', scope: 'exclusive', evidence: 'コピーキャットゲーム', evidenceVerified: true },
   ];
   assert.deepEqual(selectItemsForType(items, 'entertainment').map(item => item.text), ['コピーキャット']);
 });

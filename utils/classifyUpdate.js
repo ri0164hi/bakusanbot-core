@@ -50,13 +50,16 @@ async function generateClassification(content, articleUrl) {
   const parsed = parseJson(result.response.text());
   if (!Array.isArray(parsed.items)) throw new Error('分類結果にitemsがありません。');
 
-  const items = parsed.items.map(item => ({
+  const items = parsed.items.map(item => {
+    const evidence = String(item.evidence || '').trim();
+    return ({
     text: String(item.text || ''), sectionPath: Array.isArray(item.sectionPath) ? item.sectionPath.map(String) : [],
     modes: Array.isArray(item.modes) ? item.modes.filter(mode => MODES.includes(mode)) : ['unknown'],
     scope: ['exclusive', 'shared', 'unclear'].includes(item.scope) ? item.scope : 'unclear',
     confidence: ['high', 'medium', 'low'].includes(item.confidence) ? item.confidence : 'low',
-    evidence: String(item.evidence || ''), entity: String(item.entity || ''), reason: String(item.reason || ''),
-  })).filter(item => item.text);
+    evidence, evidenceVerified: Boolean(evidence) && content.includes(evidence),
+    entity: String(item.entity || ''), reason: String(item.reason || ''),
+  }); }).filter(item => item.text);
 
   cache[hash] = { version: KNOWLEDGE_VERSION, articleUrl, items, timestamp: Date.now() };
   fs.mkdirSync(path.dirname(cachePath), { recursive: true });
@@ -67,7 +70,7 @@ async function generateClassification(content, articleUrl) {
   const db = readKnowledge();
   const existing = new Set(db.reviews.map(review => `${review.hash}:${review.text}`));
   for (const item of items) {
-    const confirmed = item.confidence === 'high' && item.evidence && item.modes.length && !item.modes.includes('unknown');
+    const confirmed = item.confidence === 'high' && item.evidenceVerified && item.modes.length && !item.modes.includes('unknown');
     if (!confirmed && !existing.has(`${hash}:${item.text}`)) {
       db.reviews.push({ hash, articleUrl, ...item, status: 'pending_review', timestamp: Date.now() });
     }
@@ -93,11 +96,11 @@ function selectItemsForType(items, type) {
   const targetModes = type === 'normal' ? ['normal_match', 'cooperative_hunt', 'shared']
     : type === 'entertainment' ? ['handwriting', 'copycat', 'hide_and_seek', 'blackjack', 'other_entertainment', 'shared']
       : ['test_server', 'shared'];
-  return items.filter(item => item.confidence === 'high' && item.evidence && item.scope !== 'unclear' && item.modes.some(mode => targetModes.includes(mode)) && !item.modes.includes('unknown'));
+  return items.filter(item => item.confidence === 'high' && item.evidenceVerified && item.scope !== 'unclear' && item.modes.some(mode => targetModes.includes(mode)) && !item.modes.includes('unknown'));
 }
 
 function countPending(items) {
-  return items.filter(item => item.confidence !== 'high' || item.scope === 'unclear' || item.modes.includes('unknown')).length;
+  return items.filter(item => item.confidence !== 'high' || !item.evidenceVerified || item.scope === 'unclear' || item.modes.includes('unknown')).length;
 }
 
 module.exports = { classifyUpdateItems, selectItemsForType, countPending, readKnowledge, writeKnowledge, MODES };
